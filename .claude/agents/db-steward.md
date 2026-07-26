@@ -56,10 +56,21 @@ does not stop.
 ```bash
 npm run db:generate      # after editing lib/db/schema.ts
 npm run db:custom        # empty file for hand-written DDL (roles, policies)
-npm run db:migrate       # apply to the direct endpoint
-npm run verify:rls       # structural check — run after EVERY migration
-npm run test:integration # behavioural check
+npm run test:integration # applies your migration to a scratch database and exercises it
+npm run verify:rls       # read-only structural check of the configured database
 ```
+
+**You cannot apply a migration yourself, and must not try.** `db:migrate`,
+`db:seed`, `db:app-role` and `drizzle-kit push` all resolve to whatever
+database `.env.local` names — in practice the live one — and
+`.claude/hooks/guard-secrets.mjs` refuses them. That is deliberate: migrations
+reach production through `.github/workflows/migrate.yml` on merge to `main`,
+after review (docs/DECISIONS.md D7).
+
+So the loop for a schema change is: edit `lib/db/schema.ts`, generate the
+migration, and verify it with `npm run test:integration` — the harness applies
+every migration to a scratch Postgres and runs the policy suite against it, so a
+broken migration fails there rather than in production. Then open the PR.
 
 `drizzle-kit` models neither roles nor FORCE RLS, so policies are hand-written
 custom migrations. `entities: { roles: false }` in `drizzle.config.ts` stops
