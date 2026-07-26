@@ -104,7 +104,7 @@ function Attribute({ name, value, note }: { name: string; value: number; note: s
     <div className="rounded-lg border border-ink-800 bg-ink-900 px-3 py-2.5">
       <dt className="text-[11px] tracking-wide text-ink-400 uppercase">{name}</dt>
       <dd className="mt-0.5 font-mono text-lg text-ink-100 tabular-nums">{value}</dd>
-      <p className="mt-0.5 text-[11px] leading-tight text-ink-600">{note}</p>
+      <p className="mt-0.5 text-[11px] leading-tight text-ink-300">{note}</p>
     </div>
   );
 }

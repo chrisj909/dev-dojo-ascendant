@@ -121,7 +121,7 @@ export function ResourceBar({ label, view, tone, hint }: Props) {
           <>
             <span>+1 in {nextIn === null ? '—' : formatDuration(nextIn)}</span>
             {fullIn !== null && (
-              <span className="text-ink-600"> · full in {formatDuration(fullIn)}</span>
+              <span className="text-ink-300"> · full in {formatDuration(fullIn)}</span>
             )}
           </>
         )}

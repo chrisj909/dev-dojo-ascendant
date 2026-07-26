@@ -4,6 +4,10 @@
  * Dojo Ascendant is read on a phone, in the dark, for two minutes at a time
  * (GDD §1.3). Ink and paper at night: warm off-white on near-black, one accent,
  * nothing that glows.
+ *
+ * Every token used for text meets WCAG AA (4.5:1) against ink-900 and ink-950.
+ * ink-600 does NOT and is deliberately excluded — it is a border and separator
+ * colour at 1.66:1, and using it for prose is a bug, not a style choice.
  */
 
 @theme {
@@ -13,13 +17,20 @@
   --color-ink-800: #1d1d21;
   --color-ink-700: #2a2a30;
   --color-ink-600: #3a3a42;
-  --color-ink-400: #6f6f7a;
+  /* 5.12:1 on ink-900. Was #6f6f7a at 3.77:1 — this is the workhorse
+     secondary-text colour and it never appears above 14px. */
+  --color-ink-400: #85858f;
   --color-ink-300: #9a9aa4;
   --color-ink-200: #c8c8cf;
   --color-ink-100: #e8e6e1;
 
-  --color-cinnabar-500: #c8503c;
+  /* 4.91:1 with white. Was #c8503c at 4.498:1, which misses AA by 0.002. */
+  --color-cinnabar-500: #c04a37;
   --color-cinnabar-400: #dc6a54;
+  /* Hover for the primary CTA. Darker, not lighter: hovering must not reduce
+     contrast, and on touch the browser latches :hover on the last element
+     tapped — so the hover colour is what the player sits looking at. */
+  --color-cinnabar-600: #a83d28;
   --color-cinnabar-300: #e89a89;
 
   --color-jade-500: #4a8a72;

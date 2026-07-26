@@ -94,7 +94,7 @@ export default async function LandingPage({
         )}
       </div>
 
-      <p className="mt-12 text-xs leading-relaxed text-ink-600">
+      <p className="mt-12 text-xs leading-relaxed text-ink-300">
         Asynchronous and server-authoritative. No twitch input, no real-time combat. Sessions are
         two minutes or fifteen, never forty.
       </p>
