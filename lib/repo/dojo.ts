@@ -19,7 +19,14 @@ import {
   STARTING_FOCUS,
 } from '@/lib/constants';
 import { dojos, players, regions, type Dojo, type Player, type Region } from '@/lib/db/schema';
-import { withAnonymous, withPlayer } from '@/lib/db/rls';
+import {
+  withAnonymous,
+  withAnonymousOn,
+  withPlayer,
+  withPlayerOn,
+  type AnyDatabase,
+  type ScopedTx,
+} from '@/lib/db/rls';
 import {
   energySpec,
   focusSpec,
@@ -132,19 +139,49 @@ function toView(player: Player, dojo: Dojo, region: Region, now: Date): DojoStat
 }
 
 // ---------------------------------------------------------------------------
+// Scoping
+// ---------------------------------------------------------------------------
+
+/**
+ * Optional database override.
+ *
+ * In the application this is always absent, and every function below reaches
+ * the request-scoped pool through `withPlayer()`. The integration suite passes
+ * its own handle so it can exercise **these exact functions** rather than a
+ * reimplementation of them — which matters most for `spendEnergy`, whose
+ * compare-and-swap is the kind of thing a parallel test double would get right
+ * while the shipped code got it wrong.
+ */
+export type RepoContext = { db?: AnyDatabase };
+
+function scoped(ctx: RepoContext | undefined) {
+  const db = ctx?.db;
+  return {
+    player: <T>(userId: string, fn: (tx: ScopedTx) => Promise<T>) =>
+      db ? withPlayerOn(db, userId, fn) : withPlayer(userId, fn),
+    anonymous: <T>(fn: (tx: ScopedTx) => Promise<T>) =>
+      db ? withAnonymousOn(db, fn) : withAnonymous(fn),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
 
 /** Regions a new dojo may be founded in. World-readable, so no player needed. */
-export async function listStartingRegions(): Promise<Region[]> {
-  return withAnonymous((tx) =>
+export async function listStartingRegions(ctx?: RepoContext): Promise<Region[]> {
+  return scoped(ctx).anonymous((tx) =>
     tx.select().from(regions).where(eq(regions.unlockTier, 0)).orderBy(asc(regions.recruitQuality)),
   );
 }
 
 /** The signed-in player's dojo, with resources derived as of `now`. */
-export async function findDojoState(userId: string, now: Date): Promise<DojoState | null> {
-  return withPlayer(userId, async (tx) => {
+export async function findDojoState(
+  userId: string,
+  now: Date,
+  ctx?: RepoContext,
+): Promise<DojoState | null> {
+  return scoped(ctx).player(userId, async (tx) => {
     const rows = await tx
       .select({ player: players, dojo: dojos, region: regions })
       .from(players)
@@ -158,8 +195,8 @@ export async function findDojoState(userId: string, now: Date): Promise<DojoStat
 }
 
 /** Whether this user has completed onboarding. Cheaper than loading the state. */
-export async function hasPlayer(userId: string): Promise<boolean> {
-  return withPlayer(userId, async (tx) => {
+export async function hasPlayer(userId: string, ctx?: RepoContext): Promise<boolean> {
+  return scoped(ctx).player(userId, async (tx) => {
     const rows = await tx.select({ id: players.id }).from(players).limit(1);
     return rows.length > 0;
   });
@@ -207,9 +244,10 @@ export async function createPlayerAndDojo(
   userId: string,
   input: CreateDojoInput,
   now: Date,
+  ctx?: RepoContext,
 ): Promise<CreateDojoResult> {
   try {
-    const state = await withPlayer(userId, async (tx) => {
+    const state = await scoped(ctx).player(userId, async (tx) => {
       const [region] = await tx
         .select()
         .from(regions)
@@ -285,8 +323,9 @@ export async function spendEnergy(
   userId: string,
   amount: number,
   now: Date,
+  ctx?: RepoContext,
 ): Promise<SpendResourceResult> {
-  return withPlayer(userId, async (tx) => {
+  return scoped(ctx).player(userId, async (tx) => {
     const rows = await tx
       .select({ player: players, dojo: dojos, region: regions })
       .from(players)
