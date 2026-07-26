@@ -25,7 +25,16 @@ export default defineConfig({
         },
       },
       {
-        resolve: { tsconfigPaths: true },
+        resolve: {
+          tsconfigPaths: true,
+          alias: {
+            // `server-only` resolves to a module that throws under the browser
+            // condition, which is what Vitest supplies. Without this alias,
+            // importing anything from lib/repo/ fails for a reason unrelated to
+            // the test. `next build` still uses the real package.
+            'server-only': new URL('./tests/stubs/server-only.ts', import.meta.url).pathname,
+          },
+        },
         test: {
           name: 'integration',
           include: ['tests/integration/**/*.test.ts'],
