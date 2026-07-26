@@ -32,6 +32,7 @@ import { sql } from 'drizzle-orm';
 
 import * as schema from '@/lib/db/schema';
 import type { AnyDatabase } from '@/lib/db/rls';
+import { assertSafeTestTarget } from '@/tests/support/database-target';
 
 const MIGRATIONS_FOLDER = resolve(process.cwd(), 'drizzle');
 
@@ -124,6 +125,12 @@ export async function createHarness(): Promise<Harness> {
   const url = process.env.TEST_DATABASE_URL?.trim();
 
   if (url) {
+    // This suite truncates every table between tests. Before touching a real
+    // server, prove the target is not the database the application is serving
+    // from — the two are distinguished by nothing but an environment variable,
+    // and getting it wrong once emptied live region and user data.
+    assertSafeTestTarget(url, [process.env.DATABASE_URL, process.env.DATABASE_URL_UNPOOLED]);
+
     if (/\bneon\.tech\b/.test(url) && !/[?&]sslmode=/.test(url)) {
       throw new Error('TEST_DATABASE_URL points at Neon but omits sslmode=require');
     }

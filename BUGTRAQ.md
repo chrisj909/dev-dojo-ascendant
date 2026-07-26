@@ -66,6 +66,16 @@ files them twice.
 
 ## Fixed
 
+- [x] **P0** `test-suite-truncated-app-database` — The integration suite emptied the live database.
+  - **Repro:** set `TEST_DATABASE_URL` to the same Neon database as `DATABASE_URL`, run `npm run test:integration`.
+  - **Expected:** refuse to run. **Actual:** truncated every table between tests, deleting 5 of 6 regions and every user row.
+  - **Symptom reaching the player:** "That region is not open to new dojos" on submitting the dojo creation form, with the form blanked. Nothing in that message points at the cause.
+  - **Cause:** `tests/integration/harness.ts` truncates all tables in `beforeEach`. Nothing checked that the target was not the database the application was serving from. `.env.example` warned about it in a comment; a comment is not a control.
+  - **Fixed by:** `tests/support/database-target.ts` — the harness now refuses when `TEST_DATABASE_URL` resolves to the same host and database as `DATABASE_URL` or `DATABASE_URL_UNPOOLED`. Neon's pooled and direct endpoints normalise to the same target, so the pooled string is not a way around it. No override: there is no legitimate reason to truncate a live database.
+  - **Test:** `tests/unit/database-target.test.ts` — 13 cases, including the exact pooled/direct pairing that caused this.
+  - **Blast radius:** no player progress lost. Dojo creation had not completed, so only reference data and an unused auth row existed. Regions restored with `npm run db:seed`; fixture rows deleted.
+  - **Filed / fixed:** 2026-07-26
+
 - [x] **P0** `set-role-missing-set-option` — Every request failed against real Neon with `permission denied to set role "app_user"`.
   - **Repro:** apply migrations to a fresh Neon database, run `npm run verify:rls`.
   - **Expected:** the owner can `SET ROLE app_user`. **Actual:** `permission denied`, while `pg_has_role(..., 'MEMBER')` reported true.
