@@ -1,79 +1,83 @@
 #!/usr/bin/env node
 /**
- * PreToolUse(Bash) — refuse the small number of commands that are unrecoverable
- * or that leak credentials.
+ * PreToolUse(Bash) — refuse the commands that are unrecoverable or that leak
+ * credentials.
  *
  * This harness runs with permission prompts disabled so the loop can work
  * unattended. That removes the human "are you sure" for everything, so the
  * handful of commands that genuinely warrant one are enforced here instead,
- * where the rule is explicit and reviewable rather than living in whoever
- * happens to be watching.
+ * where the rule is explicit, reviewable, and tested.
+ *
+ * The rules themselves live in ./command-rules.mjs and are covered by
+ * tests/unit/command-rules.test.ts. This file is only the plumbing: read the
+ * payload, resolve the current branch, apply the rules, exit.
  *
  * Exit code 2 blocks the call and returns stderr to the agent as feedback.
+ *
+ * FAILS CLOSED. Earlier this exited 0 — allowing the command — when stdin was
+ * empty, unparseable, or shaped unexpectedly. For a control that is the last
+ * thing between an unattended run and a destroyed database, "I did not
+ * understand the question" must not mean "go ahead".
  */
 
-const BLOCKED = [
-  {
-    // `git add .env.local` or any force-add of an ignored env file.
-    pattern: /git\s+add\b[^\n]*(?:\s|\/)\.env(?:\.|$|\s)/,
-    reason:
-      'That would stage an env file. Secrets never enter git — .env.local is gitignored on purpose. ' +
-      'If you need to document a new variable, add it to .env.example with a placeholder value.',
-  },
-  {
-    pattern: /git\s+push\b[^\n]*(?:--force\b|-f\b)(?![\w-])/,
-    reason:
-      'Force-push is blocked. If history needs rewriting, say what and why and let a human do it. ' +
-      'To update a PR branch, push normally — the PR follows the branch.',
-  },
-  {
-    pattern: /git\s+push\b[^\n]*\s(?:origin\s+)?(?:HEAD:)?main\b/,
-    reason:
-      'Direct pushes to main are blocked. Branch, then open a PR with `/dojo-ship`. ' +
-      'main is what Vercel deploys to production.',
-  },
-  {
-    pattern: /git\s+reset\s+--hard/,
-    reason:
-      'git reset --hard discards uncommitted work irreversibly. Use `git stash` if you need a clean tree.',
-  },
-  {
-    pattern: /\bDROP\s+(?:TABLE|SCHEMA|DATABASE)\b/i,
-    reason:
-      'Destructive DDL is blocked outside a reviewed migration. Write it as a drizzle migration in drizzle/ so it is versioned and reviewable.',
-  },
-  {
-    pattern: /\bTRUNCATE\b/i,
-    reason:
-      'TRUNCATE against the configured database is blocked. The integration suite truncates its own test database via the harness; nothing else should.',
-  },
-  {
-    // Printing a connection string into the transcript.
-    pattern: /(?:cat|type|Get-Content)\s+[^\n|]*\.env(?:\.local|\.production)?\b/,
-    reason:
-      'That would print secrets into the transcript. Read .env.example instead — it lists every variable with placeholder values.',
-  },
-];
+import { execFileSync } from 'node:child_process';
+
+import { evaluate } from './command-rules.mjs';
+
+function block(message) {
+  process.stderr.write(`Blocked by .claude/hooks/guard-secrets.mjs\n\n${message}\n`);
+  process.exit(2);
+}
 
 async function readPayload() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
+  const raw = Buffer.concat(chunks).toString('utf8').trim();
+  if (!raw) return null;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    return JSON.parse(raw);
   } catch {
-    return {};
+    return null;
+  }
+}
+
+/** The branch a bare `git push` would push. Null when it cannot be determined. */
+function currentBranch() {
+  try {
+    return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
   }
 }
 
 const payload = await readPayload();
-const command = payload?.tool_input?.command;
-if (typeof command !== 'string') process.exit(0);
+if (payload === null) {
+  block('Could not read the tool payload, so this command could not be checked.');
+}
 
-for (const rule of BLOCKED) {
-  if (rule.pattern.test(command)) {
-    process.stderr.write(`Blocked by .claude/hooks/guard-secrets.mjs\n\n${rule.reason}\n`);
-    process.exit(2);
-  }
+const command = payload?.tool_input?.command;
+if (typeof command !== 'string') {
+  block(
+    'Expected a string command to check and did not get one, so this call could not be verified.',
+  );
+}
+
+const branch = currentBranch();
+const rule = evaluate(command, { currentBranch: branch });
+
+if (rule) block(rule.reason);
+
+// A `git push` whose target depends on the checked-out branch, when the branch
+// could not be resolved, is refused rather than guessed at.
+if (/\bgit\s+push\b/.test(command) && branch === null) {
+  block(
+    'Could not determine the current branch, so it is not possible to tell whether this pushes ' +
+      'to main. Run `git rev-parse --abbrev-ref HEAD` and push an explicit refspec.',
+  );
 }
 
 process.exit(0);

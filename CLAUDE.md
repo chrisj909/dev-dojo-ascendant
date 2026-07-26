@@ -52,9 +52,18 @@ npm run check            # format + types + lint + unit tests. Run before every 
 npm run test:integration # real Postgres — PGlite by default, Neon if TEST_DATABASE_URL is set
 npm run verify:rls       # is row-level security actually in force on the configured database
 npm run db:generate      # after editing lib/db/schema.ts
-npm run db:migrate       # apply migrations (direct endpoint)
-npm run db:seed          # idempotent region seed
 ```
+
+`db:migrate`, `db:seed`, `db:app-role` and `drizzle-kit push` write to
+whatever database `.env.local` names, which on a developer machine is the live
+one. `.claude/hooks/guard-secrets.mjs` refuses them, and an agent must not try
+to work around that. Migrations reach production through
+`.github/workflows/migrate.yml` on merge to `main`, after review
+(docs/DECISIONS.md D7). To check a migration, run `npm run test:integration` —
+the harness applies it to a scratch Postgres and runs the policy suite.
+
+A human running these deliberately, outside the agent harness, is a different
+matter; the hook only sees tool calls.
 
 ## Slash commands
 
@@ -114,6 +123,11 @@ Each of these cost real time. They are in `.claude/memory/` in full.
 - **Regen must advance the timestamp by _all_ elapsed ticks,** not just the ones
   consumed before the cap. Otherwise a long absence banks invisibly and
   materialises the moment the player spends.
+- **The test suite truncates.** It refuses to run against the application
+  database, but that guard exists because it once did not.
+- **A permission rule in `ask` is inert** under `bypassPermissions`. Anything
+  that must not happen unattended belongs in `.claude/hooks/command-rules.mjs`,
+  which is tested.
 
 ---
 

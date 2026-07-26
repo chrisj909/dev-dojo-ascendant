@@ -25,6 +25,23 @@ const NEON_BRANCH =
 const NEON_OTHER_DB =
   'postgresql://neondb_owner:pw@ep-shiny-smoke-ax7o0tdh.c-4.us-east-2.aws.neon.tech/neondb_test?sslmode=require';
 
+/**
+ * Four spellings that reach the identical host and database while looking
+ * different to a naive comparison. Each was a live bypass of this guard, found
+ * by adversarial review AFTER the guard shipped — the first version compared
+ * `new URL().hostname` and `pathname` with only lowercasing and -pooler
+ * stripping.
+ */
+const BYPASSES: Record<string, string> = {
+  'trailing dot on the host':
+    'postgresql://u:p@ep-shiny-smoke-ax7o0tdh.c-4.us-east-2.aws.neon.tech./neondb',
+  'uppercase host': 'postgresql://u:p@EP-SHINY-SMOKE-AX7O0TDH.C-4.US-EAST-2.AWS.NEON.TECH/neondb',
+  'real host hidden in ?host=':
+    'postgresql://u:p@decoy.example.com/neondb?host=ep-shiny-smoke-ax7o0tdh.c-4.us-east-2.aws.neon.tech',
+  'percent-encoded database name':
+    'postgresql://u:p@ep-shiny-smoke-ax7o0tdh.c-4.us-east-2.aws.neon.tech/%6ee%6fndb',
+};
+
 describe('parseTarget', () => {
   it('reduces a connection string to the host and database that identify it', () => {
     expect(parseTarget(NEON_DIRECT)).toEqual({
@@ -69,6 +86,39 @@ describe('isSameDatabase', () => {
 
   it('is false when either side is unparseable rather than guessing', () => {
     expect(isSameDatabase(NEON_DIRECT, '')).toBe(false);
+  });
+});
+
+describe('bypasses that reach the same database by another spelling', () => {
+  for (const [label, url] of Object.entries(BYPASSES)) {
+    it(`is not fooled by a ${label}`, () => {
+      expect(isSameDatabase(url, NEON_DIRECT), label).toBe(true);
+      expect(() => assertSafeTestTarget(url, [NEON_POOLED, NEON_DIRECT])).toThrow(/same database/i);
+    });
+  }
+
+  it('resolves ?host= the way the driver does, not the way the URL reads', () => {
+    // pg prefers the host query parameter over the URL authority, so the
+    // hostname a naive check inspects is decorative.
+    expect(parseTarget(BYPASSES['real host hidden in ?host='])?.host).toBe(
+      'ep-shiny-smoke-ax7o0tdh.c-4.us-east-2.aws.neon.tech',
+    );
+  });
+});
+
+describe('unparseable input fails closed', () => {
+  it('refuses rather than allowing when the test target cannot be parsed', () => {
+    // Returning "not the same database" on a string nobody understands is the
+    // wrong default for a guard whose failure mode is deleting live data.
+    expect(() => assertSafeTestTarget('not a url', [NEON_DIRECT])).toThrow(/could not be parsed/i);
+  });
+
+  it('refuses when an application connection string cannot be parsed', () => {
+    expect(() => assertSafeTestTarget(NEON_BRANCH, ['garbage://'])).toThrow(/could not be parsed/i);
+  });
+
+  it('still allows a clean target when no application database is configured', () => {
+    expect(() => assertSafeTestTarget(NEON_BRANCH, [undefined, ''])).not.toThrow();
   });
 });
 

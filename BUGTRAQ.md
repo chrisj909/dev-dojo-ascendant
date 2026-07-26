@@ -66,6 +66,21 @@ files them twice.
 
 ## Fixed
 
+- [x] **P0** `harness-guards-did-not-guard` — Two controls in the agent harness read as protective and were not.
+  - **Found by:** the adversarial QA sweep, after both had shipped.
+  - **1. Pushes to `main` were not blocked.** The rule required the literal `main` preceded by whitespace, so a bare `git push` while standing on main passed, as did `git push -u origin HEAD`. `git push origin +main` defeated the main rule and the force rule at once. `/dojo-ship` names this hook as its enforcement.
+  - **2. The loop could migrate and seed production.** `db:migrate`, `db:seed`, `db:app-role` and `drizzle-kit push` all resolve `DATABASE_URL` from `.env.local` — the live database. The only guard was an `ask` permission entry, which is **inert** under `"defaultMode": "bypassPermissions"` plus `--dangerously-skip-permissions`. `db-steward`'s own instructions told it to run `npm run db:migrate`, so the loop would reach for it on any schema item and apply unreviewed DDL to production, contradicting D7.
+  - **Also:** the `.env` rules enumerated `cat|type|Get-Content`, so `head`, `grep`, `less` and `node -e` all read secrets into the transcript; and the hook exited 0 — allowing the command — on empty or malformed stdin.
+  - **Fixed by:** rules extracted to `.claude/hooks/command-rules.mjs` and covered by `tests/unit/command-rules.test.ts` (16 cases). Branch resolved with `git rev-parse` so implicit pushes are caught. Env rules match the file path rather than an allow-list of readers. The hook now **fails closed** on unreadable input, and refuses a `git push` when the branch cannot be determined. `db-steward.md` and `CLAUDE.md` rewritten to state that applying migrations is CI's job, not an agent's.
+  - **Verified:** end to end through the hook's real stdin contract, not just the unit tests.
+  - **Filed / fixed:** 2026-07-26
+
+- [x] **P1** `truncation-guard-bypassable` — The guard added in #3 was defeated by four connection-string spellings.
+  - **Cause:** it compared `new URL().hostname` and `.pathname` with only lowercasing and `-pooler` stripping. A trailing dot, an uppercase host, a percent-encoded database name, and `?host=` all reach the identical database while comparing unequal. `?host=` is the sharpest — node-postgres **prefers it over the URL authority**, so the hostname the guard inspected was decorative.
+  - **Fixed by:** resolving the target with `pg-connection-string`, the same parser `pg` uses to decide where to connect, so the guard and the driver cannot disagree about what a string means. Also fails closed when either string is unparseable, instead of reporting "not the same database".
+  - **Test:** `tests/unit/database-target.test.ts`, 23 cases, one per bypass.
+  - **Filed / fixed:** 2026-07-26
+
 - [x] **P0** `dojo-creation-redirect-loop` — Creating a dojo did nothing: the form blanked, stayed put, and said nothing.
   - **Repro:** hold a valid session whose `users` row has been deleted, then submit the creation form.
   - **Expected:** a clear message and a route out. **Actual:** an endless bounce between `/create` and `/dojo`, form cleared each time, nothing created, nothing explained.
