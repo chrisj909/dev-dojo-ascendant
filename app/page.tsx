@@ -3,15 +3,30 @@ import { redirect } from 'next/navigation';
 import { currentUserId, devLoginAvailable, githubAvailable } from '@/auth';
 import { signInLocally, signInWithGitHub } from '@/lib/actions/auth';
 import { hasPlayer } from '@/lib/repo/dojo';
+import { authUserExists } from '@/lib/repo/session';
 
-export default async function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string }>;
+}) {
+  const { reason } = await searchParams;
   const userId = await currentUserId();
 
-  if (userId) {
+  // A JWT outlives the row it names, so "signed in" is not the same as
+  // "exists". Routing a ghost session onward sends the player to a form whose
+  // every submission fails on a foreign key — which is precisely what happened.
+  const live = userId ? await authUserExists(userId) : false;
+
+  if (userId && live) {
     // Signed in but not onboarded is a real state — the session outlives any
     // half-finished creation flow.
     redirect((await hasPlayer(userId)) ? '/dojo' : '/create');
   }
+
+  // A ghost session falls through to the sign-in view below. Signing in again
+  // mints a fresh user row and overwrites the stale cookie.
+  const staleSession = Boolean(userId) && !live;
 
   const github = githubAvailable();
   const dev = devLoginAvailable();
@@ -29,6 +44,18 @@ export default async function LandingPage() {
         your teaching they leave to found a branch of your school. Your power grows not by
         accumulating fighters, but by accumulating generations.
       </p>
+
+      {(reason === 'session-expired' || staleSession) && (
+        // Reached by redirect from the creation flow when the session names a
+        // user row that no longer exists. Retrying there fails identically, so
+        // the only useful thing to say is "sign in again".
+        <p
+          role="status"
+          className="mt-8 rounded-md border border-cinnabar-500/30 bg-cinnabar-500/5 p-3 text-sm text-cinnabar-300"
+        >
+          Your session referred to an account that no longer exists. Sign in again to continue.
+        </p>
+      )}
 
       <div className="mt-10 flex flex-col gap-3">
         {github && (

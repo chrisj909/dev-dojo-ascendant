@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import { createDojoAction, type CreateDojoState } from '@/lib/actions/onboarding';
@@ -56,6 +56,14 @@ const inputClass =
 export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
   const [state, formAction] = useActionState(createDojoAction, INITIAL);
   const errors = state.errors ?? {};
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  // Move focus to the failure message when one appears. Without this a
+  // keyboard or screen-reader user gets no signal at all that the submit
+  // failed — the page simply does not navigate.
+  useEffect(() => {
+    if (state.message) errorRef.current?.focus();
+  }, [state.message]);
 
   return (
     <form action={formAction} className="mt-10 space-y-6">
@@ -153,7 +161,15 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
       </fieldset>
 
       {state.message && (
-        <p className="rounded-md border border-cinnabar-500/30 bg-cinnabar-500/5 p-3 text-sm text-cinnabar-300">
+        // role=alert so a screen reader announces it, and tabIndex so the focus
+        // move below can land here. A failed submit that says nothing is the
+        // bug this exists to prevent.
+        <p
+          ref={errorRef}
+          tabIndex={-1}
+          role="alert"
+          className="rounded-md border border-cinnabar-500/30 bg-cinnabar-500/5 p-3 text-sm text-cinnabar-300 outline-none"
+        >
           {state.message}
         </p>
       )}
