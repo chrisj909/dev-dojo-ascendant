@@ -58,12 +58,21 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
   const errors = state.errors ?? {};
   const errorRef = useRef<HTMLParagraphElement>(null);
 
-  // Move focus to the failure message when one appears. Without this a
-  // keyboard or screen-reader user gets no signal at all that the submit
-  // failed — the page simply does not navigate.
+  // What the player typed, echoed back by the action. React 19 resets an
+  // uncontrolled `<form action={fn}>` on every dispatch, so without re-seeding
+  // the defaults from this the form empties itself on every error.
+  const values = state.values ?? {};
+  const hasFieldErrors = Object.keys(errors).length > 0;
+  const alert =
+    state.message ?? (hasFieldErrors ? 'Check the highlighted fields and try again.' : null);
+
+  // Keyed on the nonce, not the text: submitting twice and getting the identical
+  // message must still move focus and re-announce. Without a signal here, a
+  // failed submit is indistinguishable from nothing happening — which is exactly
+  // how this bug was reported.
   useEffect(() => {
-    if (state.message) errorRef.current?.focus();
-  }, [state.message]);
+    if (state.nonce) errorRef.current?.focus();
+  }, [state.nonce]);
 
   return (
     <form action={formAction} className="mt-10 space-y-6">
@@ -75,6 +84,7 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
         <input
           name="handle"
           required
+          defaultValue={values.handle ?? ''}
           autoComplete="off"
           spellCheck={false}
           placeholder="iron_crane"
@@ -86,6 +96,7 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
         <input
           name="headmasterName"
           required
+          defaultValue={values.headmasterName ?? ''}
           autoComplete="off"
           placeholder="Tomoe Sasaki"
           className={inputClass}
@@ -97,7 +108,16 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
         hint="Sets your starting scroll lineage."
         error={errors.nationality}
       >
-        <select name="nationality" required defaultValue="" className={inputClass}>
+        <select
+          // Keyed so a changed echo remounts the select. React applies
+          // `defaultValue` to a <select> on mount only, so without this the
+          // nationality is the one field the reset still wipes.
+          key={`nationality-${values.nationality ?? ''}`}
+          name="nationality"
+          required
+          defaultValue={values.nationality ?? ''}
+          className={inputClass}
+        >
           <option value="" disabled>
             Choose…
           </option>
@@ -113,6 +133,7 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
         <input
           name="dojoName"
           required
+          defaultValue={values.dojoName ?? ''}
           autoComplete="off"
           placeholder="The Low Gate"
           className={inputClass}
@@ -134,7 +155,7 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
                 type="radio"
                 name="regionSlug"
                 value={region.slug}
-                defaultChecked={index === 0}
+                defaultChecked={values.regionSlug ? values.regionSlug === region.slug : index === 0}
                 required
                 className="mt-1 accent-cinnabar-500"
               />
@@ -160,7 +181,7 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
         )}
       </fieldset>
 
-      {state.message && (
+      {alert && (
         // role=alert so a screen reader announces it, and tabIndex so the focus
         // move below can land here. A failed submit that says nothing is the
         // bug this exists to prevent.
@@ -170,7 +191,7 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
           role="alert"
           className="rounded-md border border-cinnabar-500/30 bg-cinnabar-500/5 p-3 text-sm text-cinnabar-300 outline-none"
         >
-          {state.message}
+          {alert}
         </p>
       )}
 

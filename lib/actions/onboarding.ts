@@ -29,7 +29,45 @@ import { createDojoSchema, fieldErrors } from '@/lib/validation';
 export type CreateDojoState = {
   errors?: Record<string, string>;
   message?: string;
+  /**
+   * What the player typed, echoed back.
+   *
+   * React 19 calls `requestFormReset` on every `<form action={fn}>` dispatch,
+   * before the action even runs. Every control here is uncontrolled, so without
+   * echoing the submission back the form empties itself on every error return —
+   * and the region radio silently reverts to the first option, which is a
+   * permanent, one-time founding choice driving recruit quality and scroll
+   * families (GDD §4.3, §7.1).
+   *
+   * The controls read these as `defaultValue`/`defaultChecked`. React commits
+   * the new default attributes before the native reset runs, so the echoed
+   * values are what the reset restores.
+   */
+  values?: Record<string, string>;
+  /**
+   * Changes on every response. The alert effect keys on this rather than on the
+   * message text, so submitting twice and getting the identical error still
+   * re-announces — otherwise the second failure produces no signal at all.
+   */
+  nonce?: number;
 };
+
+/** Everything the player typed, for echoing back on a failed submit. */
+function submitted(formData: FormData): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === 'string') values[key] = value;
+  }
+  return values;
+}
+
+let responseCounter = 0;
+
+/** Attach the echo and a fresh nonce to any state being returned to the form. */
+function reply(state: CreateDojoState, formData: FormData): CreateDojoState {
+  responseCounter += 1;
+  return { ...state, values: submitted(formData), nonce: responseCounter };
+}
 
 export async function createDojoAction(
   _previous: CreateDojoState,
@@ -47,7 +85,7 @@ export async function createDojoAction(
   });
 
   if (!parsed.success) {
-    return { errors: fieldErrors(parsed.error) };
+    return reply({ errors: fieldErrors(parsed.error) }, formData);
   }
 
   const now = new Date();
@@ -70,9 +108,10 @@ export async function createDojoAction(
     // here means something outside that vocabulary went wrong — a dropped
     // connection, most likely. Say so; never return silently.
     console.error('[createDojoAction] unexpected failure', error);
-    return {
-      message: 'Could not reach the database. Nothing was created — try again in a moment.',
-    };
+    return reply(
+      { message: 'Could not reach the database. Nothing was created — try again in a moment.' },
+      formData,
+    );
   }
 
   if (result.ok) {
@@ -82,12 +121,13 @@ export async function createDojoAction(
 
   switch (result.reason) {
     case 'handle_taken':
-      return { errors: { handle: 'That handle is taken.' } };
+      return reply({ errors: { handle: 'That handle is taken.' } }, formData);
 
     case 'unknown_region':
-      return {
-        errors: { regionSlug: 'That region is not open to new dojos. Pick another.' },
-      };
+      return reply(
+        { errors: { regionSlug: 'That region is not open to new dojos. Pick another.' } },
+        formData,
+      );
 
     case 'stale_session':
       // A valid signed token naming a `users` row that no longer exists.
@@ -101,10 +141,13 @@ export async function createDojoAction(
       break;
 
     case 'unexpected':
-      return {
-        message:
-          'Something went wrong creating the dojo, and nothing was saved. If it happens again, please report it.',
-      };
+      return reply(
+        {
+          message:
+            'Something went wrong creating the dojo, and nothing was saved. If it happens again, please report it.',
+        },
+        formData,
+      );
   }
 
   // 'already_exists' only. Confirm the dojo really is there before sending them
@@ -116,8 +159,11 @@ export async function createDojoAction(
     redirect('/dojo');
   }
 
-  return {
-    message:
-      'That account already has a dojo, but it could not be loaded. Try signing out and back in.',
-  };
+  return reply(
+    {
+      message:
+        'That account already has a dojo, but it could not be loaded. Try signing out and back in.',
+    },
+    formData,
+  );
 }
