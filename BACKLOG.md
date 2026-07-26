@@ -50,10 +50,10 @@ reading exactly 55/55 rather than 110.
 **Done when:** a student can be recruited, drilled from white belt to belt 2, and
 tuition accrues and collects correctly.
 
-- [ ] **P0** `spec-test-3-roster-cap` — Roster cap cannot be exceeded by recruiting, poaching, or graduation reversal.
+- [x] **P0** `spec-test-3-roster-cap` — Roster cap cannot be exceeded by recruiting, poaching, or graduation reversal. (#8)
   - **Why:** SPEC §7 test 3, GDD §4.1
-  - **Done when:** a test proves all three routes are refused at `ROSTER_CAP_BY_TIER[tier]`, and the cap is enforced by a database constraint rather than only in application code.
-  - **Note:** write this before any recruitment code exists.
+  - **Done:** enforced by a `BEFORE INSERT OR UPDATE` trigger on `students` (drizzle/0005), covering all three routes — they are two SQL operations. Caps live in `roster_caps`, seeded from `ROSTER_CAP_BY_TIER` so the table cannot drift from the constant. Graduates do not consume a place (GDD §9.1). Serialised per dojo with an advisory lock, so two concurrent recruits cannot both pass the check.
+  - **Test:** `tests/integration/roster-cap.test.ts`, 10 cases, written before the trigger and mutation-verified.
 
 - [ ] **P0** `student-generation` — Generate a student with attributes, aptitudes, temperament and background.
   - **Why:** GDD §4.2

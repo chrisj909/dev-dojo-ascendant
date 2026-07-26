@@ -9,7 +9,8 @@
 
 import { sql } from 'drizzle-orm';
 
-import { regions } from '@/lib/db/schema';
+import { ROSTER_CAP_BY_TIER } from '@/lib/constants';
+import { regions, rosterCaps } from '@/lib/db/schema';
 import { REGION_SEEDS } from '@/lib/db/seed/regions';
 
 import { describeTarget, open } from './db';
@@ -51,6 +52,22 @@ async function main() {
       console.log(`  ${region.slug.padEnd(20)} ${gate}`);
     }
     console.log(`[seed] ${result.length} regions up to date`);
+
+    // The roster cap trigger reads these at runtime, so they must track
+    // lib/constants.ts. Seeding rather than hard-coding in the migration is
+    // what keeps the two from drifting apart silently.
+    const caps = await db
+      .insert(rosterCaps)
+      .values(ROSTER_CAP_BY_TIER.map((cap, tier) => ({ tier, cap })))
+      .onConflictDoUpdate({ target: rosterCaps.tier, set: { cap: sql`excluded.cap` } })
+      .returning({ tier: rosterCaps.tier, cap: rosterCaps.cap });
+
+    console.log(
+      `[seed] roster caps ${caps
+        .sort((a, b) => a.tier - b.tier)
+        .map((c) => c.cap)
+        .join(', ')}`,
+    );
   } finally {
     await pool.end();
   }

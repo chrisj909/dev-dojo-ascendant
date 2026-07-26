@@ -124,6 +124,20 @@ export const regions = pgTable('regions', {
   createdAt: createdAt(),
 });
 
+/**
+ * The roster cap per dojo tier. GDD §4.1.
+ *
+ * Reference data rather than a constant compiled into a CHECK, because the
+ * trigger that enforces the cap has to read it at runtime — and because a
+ * number baked into a migration diverges silently from lib/constants.ts the
+ * moment somebody edits one and not the other. `npm run db:seed` writes this
+ * from ROSTER_CAP_BY_TIER, and an integration test asserts they match.
+ */
+export const rosterCaps = pgTable('roster_caps', {
+  tier: integer('tier').primaryKey(),
+  cap: integer('cap').notNull(),
+});
+
 // ---------------------------------------------------------------------------
 // Player-owned. Every table below is under RLS.
 // ---------------------------------------------------------------------------
@@ -417,6 +431,7 @@ export type Branch = typeof branches.$inferSelect;
 
 /** Every table that carries a row-level security policy. */
 export const RLS_TABLES = [
+  'roster_caps',
   'players',
   'dojos',
   'students',
