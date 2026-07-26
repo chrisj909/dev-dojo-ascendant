@@ -36,6 +36,12 @@ Entry format:
 
 _None._
 
+An adversarial QA sweep on 2026-07-26 raised 15 findings that survived
+independent double-refutation, across seven domains. All are closed — see
+Fixed below, and PRs #4 through #7. Three were P0: two harness controls that
+enforced nothing, and a form that discarded everything the player typed on
+every error.
+
 Phase 1 shipped with `npm run check`, `npm run test:integration` (against both
 PGlite and live Neon) and `npm run verify:rls` all green.
 
