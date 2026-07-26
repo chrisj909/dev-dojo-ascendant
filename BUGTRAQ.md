@@ -66,6 +66,17 @@ files them twice.
 
 ## Fixed
 
+- [x] **P0** `dojo-creation-redirect-loop` — Creating a dojo did nothing: the form blanked, stayed put, and said nothing.
+  - **Repro:** hold a valid session whose `users` row has been deleted, then submit the creation form.
+  - **Expected:** a clear message and a route out. **Actual:** an endless bounce between `/create` and `/dojo`, form cleared each time, nothing created, nothing explained.
+  - **Cause:** two defects compounding.
+    1. `createPlayerAndDojo` classified write failures with a regex over the error message. `/players_user_id/` was written for the unique constraint `players_user_id_unique` and also matched the foreign key `players_user_id_users_id_fk`. Drizzle derives both names from table and column, so any substring rule confuses them. A dangling user reference was therefore reported as `already_exists`, which redirected to `/dojo`, which found no dojo and redirected back to `/create`.
+    2. Sessions are JWTs and outlive the `users` row they name (D6). Nothing detected that, so the landing page routed a ghost session onward to a form where every submit failed on a foreign key.
+  - **Fixed by:** `lib/db/write-errors.ts` classifies by SQLSTATE plus exact constraint name, with an explicit table rather than patterns. New `stale_session` outcome signs the user out and explains why — redirecting alone was not enough, because the token stayed valid and the landing page routed them straight back. `app/page.tsx` no longer routes a session whose user row is missing. `lib/actions/onboarding.ts` restructured so every `redirect()` sits outside every `try` (Next implements redirect by throwing, so a broad catch swallows it) and every failure returns a message.
+  - **Test:** `tests/unit/write-errors.test.ts` (15) and `tests/integration/onboarding.test.ts` (12). Both verified by mutation — reinstating the old classification fails them.
+  - **Also fixed:** the `already_exists` path now confirms a dojo really exists before redirecting to it, so a future misclassification degrades to a message instead of a loop.
+  - **Filed / fixed:** 2026-07-26
+
 - [x] **P0** `test-suite-truncated-app-database` — The integration suite emptied the live database.
   - **Repro:** set `TEST_DATABASE_URL` to the same Neon database as `DATABASE_URL`, run `npm run test:integration`.
   - **Expected:** refuse to run. **Actual:** truncated every table between tests, deleting 5 of 6 regions and every user row.

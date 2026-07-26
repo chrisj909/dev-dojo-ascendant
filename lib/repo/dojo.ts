@@ -19,6 +19,7 @@ import {
   STARTING_FOCUS,
 } from '@/lib/constants';
 import { dojos, players, regions, type Dojo, type Player, type Region } from '@/lib/db/schema';
+import { classifyWriteError } from '@/lib/db/write-errors';
 import {
   withAnonymous,
   withAnonymousOn,
@@ -231,7 +232,10 @@ export type CreateDojoInput = {
 
 export type CreateDojoResult =
   | { ok: true; state: DojoState }
-  | { ok: false; reason: 'handle_taken' | 'already_exists' | 'unknown_region' };
+  | {
+      ok: false;
+      reason: 'handle_taken' | 'already_exists' | 'unknown_region' | 'stale_session' | 'unexpected';
+    };
 
 /**
  * Creates the player and their dojo in ONE transaction.
@@ -288,15 +292,18 @@ export async function createPlayerAndDojo(
   } catch (error) {
     if (error instanceof DomainError) return { ok: false, reason: error.reason };
 
-    const message = flattenError(error);
-    // The unique indexes are the real guard; these translate them for the UI.
-    if (/players_handle|players_handle_lower_idx/.test(message)) {
-      return { ok: false, reason: 'handle_taken' };
-    }
-    if (/players_user_id|dojos_player_id/.test(message)) {
-      return { ok: false, reason: 'already_exists' };
-    }
-    throw error;
+    // Classified by SQLSTATE and exact constraint name. This used to be a regex
+    // over the error message, and `/players_user_id/` matched both
+    // `players_user_id_unique` and `players_user_id_users_id_fk` — reporting a
+    // deleted account as "you already have a dojo" and producing a redirect
+    // loop. See lib/db/write-errors.ts.
+    const failure = classifyWriteError(error);
+    if (failure !== 'unknown') return { ok: false, reason: failure };
+
+    // Unrecognised. Surfaced as itself rather than guessed at — guessing is
+    // exactly what caused the loop.
+    console.error('[createPlayerAndDojo] unclassified write failure', error);
+    return { ok: false, reason: 'unexpected' };
   }
 }
 
@@ -367,18 +374,6 @@ class DomainError extends Error {
   constructor(public readonly reason: 'unknown_region') {
     super(reason);
   }
-}
-
-/** Drizzle nests the driver error; the useful text is on `cause`. */
-function flattenError(error: unknown): string {
-  const parts: string[] = [];
-  let current: unknown = error;
-  for (let depth = 0; current && depth < 8; depth += 1) {
-    if (!(current instanceof Error)) break;
-    parts.push(current.message);
-    current = (current as { cause?: unknown }).cause;
-  }
-  return parts.join(' ');
 }
 
 export const RESOURCE_REGEN_MS = { energy: ENERGY_REGEN_MS, focus: FOCUS_REGEN_MS } as const;
