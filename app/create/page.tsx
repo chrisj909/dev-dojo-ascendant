@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { currentUserId } from '@/auth';
+import { signOutAction } from '@/lib/actions/auth';
 import { CreateDojoForm } from '@/components/CreateDojoForm';
 import { hasPlayer, listStartingRegions } from '@/lib/repo/dojo';
 
@@ -35,6 +36,24 @@ export default async function CreatePage() {
           scrollFamilies: region.scrollFamilies,
         }))}
       />
+
+      {/*
+        The only other sign-out control lives on /dojo, which redirects here
+        when there is no dojo — and / redirects here too. That made this page
+        a dead end: signing in with the wrong account left no way back except
+        clearing cookies. The action's own copy even advises "try signing out",
+        advice that was unreachable from the page showing it.
+      */}
+      <div className="mt-10 border-t border-ink-800 pt-6">
+        <form action={signOutAction}>
+          <button
+            type="submit"
+            className="cursor-pointer text-xs text-ink-400 underline underline-offset-4 transition hover:text-ink-200"
+          >
+            Sign in as someone else
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

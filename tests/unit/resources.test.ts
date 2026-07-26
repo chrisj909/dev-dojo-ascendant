@@ -385,6 +385,57 @@ describe('countdown helpers used by the UI', () => {
   });
 });
 
+describe('countdowns when the client clock runs behind the server', () => {
+  // regenerate() deliberately does nothing when now < updatedAt — a backwards
+  // clock must not cost the player anything. Both countdown helpers clamped the
+  // elapsed time with Math.max(0, ...), which discarded the skew and made them
+  // disagree with regenerate: the only place in this module where they are not
+  // exact inverses.
+  //
+  // Symptom: a browser a few minutes slow renders the same "+1 in 6m 00s" on
+  // every one-second tick, for as long as the skew lasts. The one screen Phase 1
+  // exists to deliver visibly does not tick.
+  const spec = energySpec(5);
+  const SKEW = 10 * MS_PER_MINUTE;
+
+  it('reports the real wait, not the wait a clamped clock implies', () => {
+    // Stored timestamp is 10 minutes in the future from the client's view.
+    const state = { value: 10, updatedAt: at(SKEW) };
+    const wait = msUntilNext(state, T0, spec);
+    expect(wait).not.toBeNull();
+
+    // Waiting exactly that long must actually produce the next point.
+    expect(regenerate(state, at(wait!), spec).value).toBe(11);
+    expect(regenerate(state, at(wait! - 1), spec).value).toBe(10);
+  });
+
+  it('reports the real wait to full', () => {
+    const state = { value: 53, updatedAt: at(SKEW) };
+    const wait = msUntilFull(state, T0, spec);
+    expect(wait).not.toBeNull();
+
+    expect(regenerate(state, at(wait!), spec).value).toBe(spec.cap);
+    expect(regenerate(state, at(wait! - 1), spec).value).toBe(spec.cap - 1);
+  });
+
+  it('stays exact across a range of skews', () => {
+    for (const skewMinutes of [1, 5, 6, 7, 30, 121]) {
+      const state = { value: 20, updatedAt: at(skewMinutes * MS_PER_MINUTE) };
+      const wait = msUntilNext(state, T0, spec);
+      expect(wait, `skew ${skewMinutes}m`).not.toBeNull();
+      expect(regenerate(state, at(wait!), spec).value, `skew ${skewMinutes}m`).toBe(21);
+    }
+  });
+
+  it('counts down rather than freezing as the client clock catches up', () => {
+    const state = { value: 10, updatedAt: at(SKEW) };
+    const first = msUntilNext(state, T0, spec)!;
+    const later = msUntilNext(state, at(MS_PER_MINUTE), spec)!;
+    // A minute of real time must remove a minute from the countdown.
+    expect(first - later).toBe(MS_PER_MINUTE);
+  });
+});
+
 describe('invariants across a long deterministic walk', () => {
   it('never exceeds the cap, never goes negative, never moves the clock forward', () => {
     const spec = energySpec(5);

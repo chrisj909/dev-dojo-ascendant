@@ -22,7 +22,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full cursor-pointer rounded-md bg-cinnabar-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-cinnabar-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cinnabar-300 disabled:cursor-not-allowed disabled:opacity-60"
+      className="w-full cursor-pointer rounded-md bg-cinnabar-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-cinnabar-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cinnabar-300 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? 'Opening the doors…' : 'Open the dojo'}
     </button>
@@ -51,7 +51,7 @@ function Field({
 }
 
 const inputClass =
-  'w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-cinnabar-400 focus:outline-none';
+  'w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2.5 text-sm text-ink-100 placeholder:text-ink-400 focus:border-cinnabar-400 focus:outline-none';
 
 export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
   const [state, formAction] = useActionState(createDojoAction, INITIAL);
@@ -169,7 +169,7 @@ export function CreateDojoForm({ regions }: { regions: RegionOption[] }) {
                 <span className="mt-1 block text-xs leading-relaxed text-ink-300">
                   {region.description}
                 </span>
-                <span className="mt-1.5 block font-mono text-[11px] text-ink-600">
+                <span className="mt-1.5 block font-mono text-[11px] text-ink-300">
                   {region.scrollFamilies.map((f) => f.replace(/_/g, ' ')).join(' · ')}
                 </span>
               </span>

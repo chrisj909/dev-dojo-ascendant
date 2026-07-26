@@ -219,9 +219,16 @@ export function msUntilNext(state: ResourceState, now: Date, spec: RegenSpec): n
   if (current.value >= cap) return null;
 
   // After regenerate, `now - updatedAt` is the progress into the current tick,
-  // always within [0, regenMs).
+  // within [0, regenMs) — UNLESS the caller's clock is behind the stored
+  // timestamp, which happens routinely: this runs in a browser, against a
+  // timestamp the server wrote.
+  //
+  // `regenerate` does nothing at all while now < updatedAt, so the wait is that
+  // deficit PLUS a full tick. Clamping it away instead made this disagree with
+  // `regenerate` and froze the countdown for the duration of the skew.
+  const deficit = Math.max(0, current.updatedAt.getTime() - now.getTime());
   const intoTick = Math.max(0, now.getTime() - current.updatedAt.getTime());
-  return regenMs - intoTick;
+  return deficit + regenMs - intoTick;
 }
 
 /**
@@ -232,9 +239,12 @@ export function msUntilFull(state: ResourceState, now: Date, spec: RegenSpec): n
   const current = regenerate(state, now, spec);
   if (current.value >= cap) return null;
 
+  // Same clock-skew correction as msUntilNext: nothing accrues until the
+  // caller's clock reaches the stored timestamp.
   const missing = cap - current.value;
+  const deficit = Math.max(0, current.updatedAt.getTime() - now.getTime());
   const intoTick = Math.max(0, now.getTime() - current.updatedAt.getTime());
-  return missing * regenMs - intoTick;
+  return deficit + missing * regenMs - intoTick;
 }
 
 /** Convenience for rendering: the fraction of the bar that is filled, 0..1. */
