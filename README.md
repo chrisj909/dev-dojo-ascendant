@@ -168,20 +168,79 @@ merges itself. If you would rather have prompts back, change `defaultMode` to
 
 ## Deploying
 
+**Production: <https://dojo.progrowthtech.com>** — Vercel project
+`dev-dojo-ascendant` under the `pro-growth-tech` team, deploying from `main`.
+
+The generated `dev-dojo-ascendant.vercel.app` domain redirects to the custom
+one. That redirect is not cosmetic: a GitHub OAuth app permits exactly one
+callback URL, so every sign-in has to arrive on the same host. See D9 below.
+
+### First-time setup
+
 1. Import the repository on Vercel. It detects Next.js; no `vercel.json` is
    needed.
-2. Set environment variables in the Vercel project: `DATABASE_URL` (pooled),
-   `DATABASE_URL_UNPOOLED` (direct), `AUTH_SECRET`, and the GitHub OAuth
-   credentials for a production OAuth app whose callback URL is your deployed
-   domain. Do **not** set `AUTH_DEV_LOGIN`.
-3. Add `DATABASE_URL_UNPOOLED` as a GitHub Actions secret so
-   `.github/workflows/migrate.yml` can run migrations on merge to `main`.
-4. Before going public, run `npm run db:app-role` and set `APP_DATABASE_URL` —
+
+2. **Attach the domain before creating the OAuth app**, so the callback points
+   at a host that answers. Settings → Domains → add `dojo.progrowthtech.com`.
+   DNS for `progrowthtech.com` is managed at WordPress.com, where a wildcard
+   `*.progrowthtech.com` already points at Vercel — so this usually verifies
+   with no DNS change. If Vercel reports _Invalid Configuration_, add a CNAME
+   record `dojo` → `cname.vercel-dns.com`.
+
+   Then set the `.vercel.app` domains to redirect to the custom domain.
+
+3. Create a **production** GitHub OAuth app
+   ([github.com/settings/developers](https://github.com/settings/developers)):
+
+   | Field                      | Value                                                     |
+   | -------------------------- | --------------------------------------------------------- |
+   | Homepage URL               | `https://dojo.progrowthtech.com`                          |
+   | Authorization callback URL | `https://dojo.progrowthtech.com/api/auth/callback/github` |
+
+   The callback path is derived from the route handler and the provider id — it
+   is not configurable. Local development needs a **separate** OAuth app
+   pointing at `http://localhost:3000/api/auth/callback/github`, because one app
+   holds one callback URL. Or just use `AUTH_DEV_LOGIN=1` locally, which is what
+   it exists for.
+
+4. Set environment variables in the Vercel project (Production scope):
+
+   | Variable                                | Value                             |
+   | --------------------------------------- | --------------------------------- |
+   | `DATABASE_URL`                          | Neon **pooled** connection string |
+   | `DATABASE_URL_UNPOOLED`                 | Neon **direct** connection string |
+   | `AUTH_SECRET`                           | `npx auth secret`                 |
+   | `AUTH_URL`                              | `https://dojo.progrowthtech.com`  |
+   | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | from step 3                       |
+
+   Do **not** set `AUTH_DEV_LOGIN`. The provider is refused in production
+   regardless, but leaving it unset avoids the question.
+
+   Vercel bakes environment variables at build time, so **redeploy** after
+   changing any of them.
+
+5. Add `DATABASE_URL_UNPOOLED` as a GitHub Actions secret so
+   `.github/workflows/migrate.yml` can run migrations on merge to `main`:
+
+   ```bash
+   node -e "require('dotenv').config({path:'.env.local'});process.stdout.write(process.env.DATABASE_URL_UNPOOLED)" | gh secret set DATABASE_URL_UNPOOLED
+   ```
+
+   Piped rather than pasted, so the value never lands in shell history.
+
+6. Before going public, run `npm run db:app-role` and set `APP_DATABASE_URL` —
    see D4 in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 Migrations deliberately do **not** run in the Vercel build command. A build can
 be skipped, auto-cancelled, or rolled back independently of the schema, and any
 of those leaves code and database disagreeing while the deploy reports success.
+
+### Preview deployments
+
+Previews get a unique URL per deployment, which can never match the single
+registered callback URL, so **GitHub sign-in does not work on a preview**. That
+is a property of OAuth apps, not a misconfiguration. Previews are still useful
+for everything that does not require signing in.
 
 ---
 

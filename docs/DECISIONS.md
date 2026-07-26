@@ -134,3 +134,47 @@ RLS. The suite therefore never asserts what the owner can see. It also masked
 the `SET ROLE` grant bug completely — that only surfaced against live Neon. Set
 `TEST_DATABASE_URL` and run the suite against a throwaway Neon branch before
 trusting any database change.
+
+---
+
+## D9 — One canonical host, pinned in three places
+
+**Production is `https://dojo.progrowthtech.com`.** The generated
+`dev-dojo-ascendant.vercel.app` domain redirects to it, and `AUTH_URL` names it
+explicitly.
+
+**Why:** a GitHub OAuth app permits exactly **one** authorization callback URL.
+Any sign-in that begins on a different hostname fails with a `redirect_uri`
+mismatch. With both a custom domain and Vercel's generated domain serving the
+same app, that is not hypothetical — it is whichever link someone happens to
+click.
+
+Three settings cover it from different directions, and the redundancy is
+deliberate because each one fails differently:
+
+| Setting                                      | Covers                                            |
+| -------------------------------------------- | ------------------------------------------------- |
+| Vercel redirect on the `.vercel.app` domains | a user arriving on the wrong host                 |
+| `AUTH_URL=https://dojo.progrowthtech.com`    | Auth.js building a callback from the request host |
+| The OAuth app's callback URL                 | the actual grant                                  |
+
+Without `AUTH_URL`, Auth.js infers the host from the incoming request — correct
+on Vercel, but it means the callback is only right as long as the redirect is.
+
+**Consequences to remember:**
+
+- **Preview deployments cannot do GitHub sign-in.** Each gets a unique URL that
+  cannot match the one registered callback. Not a bug, and not worth fixing;
+  previews are still useful for everything that does not need a session.
+- **Local development needs its own OAuth app**, pointing at
+  `http://localhost:3000/api/auth/callback/github` — or just `AUTH_DEV_LOGIN=1`,
+  which exists precisely so nobody has to register one.
+- **Moving the domain means changing all three**, plus the DNS record. Changing
+  only the Vercel domain produces a sign-in loop that looks like an auth bug.
+
+**DNS, for whoever inherits this:** `progrowthtech.com` is registered with DNS
+at **WordPress.com**, not Vercel, and carries a wildcard `*.progrowthtech.com`
+pointing at Vercel's anycast address. A new subdomain therefore usually needs no
+DNS change at all — attach it in Vercel and it resolves. If Vercel reports
+_Invalid Configuration_, add an explicit CNAME to `cname.vercel-dns.com` at
+WordPress.com.
