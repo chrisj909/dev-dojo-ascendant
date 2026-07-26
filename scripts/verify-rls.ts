@@ -141,13 +141,18 @@ async function main() {
       }
     }
 
-    const regions = status.get('regions');
-    if (regions?.rls_enabled) pass('regions: enabled (world-readable, FORCE intentionally off)');
-    else fail('regions: RLS is disabled');
+    for (const reference of ['regions', 'roster_caps']) {
+      const row = status.get(reference);
+      if (row?.rls_enabled) {
+        pass(`${reference}: enabled (world-readable, FORCE intentionally off)`);
+      } else {
+        fail(`${reference}: RLS is disabled`);
+      }
+    }
 
     // -- 5. Any public table we forgot entirely? ----------------------------
     console.log('\ncoverage');
-    const known = new Set<string>([...OWNED_TABLES, 'regions', ...AUTH_TABLES]);
+    const known = new Set<string>([...OWNED_TABLES, 'regions', 'roster_caps', ...AUTH_TABLES]);
     const unknown = [...status.keys()].filter((t) => !known.has(t) && !t.startsWith('__drizzle'));
     if (unknown.length === 0) pass('no unclassified tables in public');
     else

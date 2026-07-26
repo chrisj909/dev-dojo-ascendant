@@ -29,6 +29,20 @@
       "when": 1785103948877,
       "tag": "0003_tuition_default",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785104432409,
+      "tag": "0004_roster_caps",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785104444793,
+      "tag": "0005_roster_cap_trigger",
+      "breakpoints": true
     }
   ]
 }
