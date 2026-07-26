@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Format, types, lint, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:unit
+
+  integration:
+    name: Integration — row-level security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # No service container and no secret. The harness falls back to PGlite —
+      # real Postgres 18 compiled to WASM, running the same migration files.
+      # A row-level security policy that CI never executes is a policy nobody
+      # knows is broken.
+      - run: npm run test:integration
+
+      # When a throwaway Neon branch is configured, run the same suite against
+      # it too. PGlite's superuser masks grant bugs — that is exactly how the
+      # SET ROLE bug in drizzle/0002 reached a live database.
+      - name: Integration against Neon
+        if: ${{ env.TEST_DATABASE_URL != '' }}
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+        run: npm run test:integration
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          # The build imports modules that validate the environment. These are
+          # syntactically valid placeholders — nothing connects during a build.
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          AUTH_SECRET: ci-build-only-not-a-real-secret

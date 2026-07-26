@@ -1,0 +1,56 @@
+name: Migrate
+
+# Migrations run HERE, not in the Vercel build command.
+#
+# A build can be skipped by an Ignored Build Step, auto-cancelled when another
+# push lands on the same branch, or reverted by Instant Rollback — and each of
+# those leaves the schema and the code disagreeing while the deploy still
+# reports success. Running migrations as their own gated step makes "did the
+# migration run" a question with an answer.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'drizzle/**'
+      - 'lib/db/schema.ts'
+  workflow_dispatch:
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply migrations to Neon
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Apply migrations
+        env:
+          # The DIRECT endpoint. Neon's pooled host is PgBouncer in transaction
+          # mode and is not a reliable place to run DDL or CREATE ROLE.
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: npm run db:migrate
+
+      - name: Seed region reference data
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: npm run db:seed
+
+      # The gate. If row-level security is not in force after a migration, the
+      # job fails loudly rather than leaving every tenant readable.
+      - name: Verify row-level security
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: npm run verify:rls
