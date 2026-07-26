@@ -33,6 +33,26 @@ jobs:
           cache: npm
       - run: npm ci
 
+      # Without this the run dies partway through `drizzle-kit migrate` with a
+      # connection error, which reads like a database problem rather than a
+      # missing secret.
+      - name: Check the connection string is configured
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          if [ -z "${DATABASE_URL_UNPOOLED}" ]; then
+            echo "::error::Repository secret DATABASE_URL_UNPOOLED is not set, so migrations cannot run."
+            echo ""
+            echo "This is the Neon DIRECT connection string — the one whose host does NOT contain '-pooler'."
+            echo "Add it with:"
+            echo "  gh secret set DATABASE_URL_UNPOOLED"
+            echo ""
+            echo "Until it is set, schema changes merged to main will NOT reach the database,"
+            echo "and the deployed code will expect a schema that is not there."
+            exit 1
+          fi
+          echo "connection string present"
+
       - name: Apply migrations
         env:
           # The DIRECT endpoint. Neon's pooled host is PgBouncer in transaction

@@ -14,8 +14,15 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
+import {
+  HEADMASTER_ATTRIBUTE_START,
+  LOYALTY_START,
+  STARTING_ENERGY,
+  STARTING_FOCUS,
+  STARTING_TUITION,
+} from '@/lib/constants';
 import { dojos, players, regions, users } from '@/lib/db/schema';
 import { createPlayerAndDojo, findDojoState } from '@/lib/repo/dojo';
 import { REGION_SEEDS } from '@/lib/db/seed/regions';
@@ -183,6 +190,66 @@ describe('region gating', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected failure');
     expect(result.reason).toBe('unknown_region');
+  });
+});
+
+describe('constants baked into column DEFAULTs stay in step with the migrations', () => {
+  // These four constants are compiled into DEFAULT clauses by
+  // drizzle/0000_init.sql. Editing lib/constants.ts does NOT change an existing
+  // database — drizzle tracks migrations by timestamp, not content — so the
+  // value a new row actually gets can silently diverge from the value the code
+  // says it gets. `STARTING_TUITION` did exactly that, at 500 against a spec
+  // that says 0.
+  //
+  // `createPlayerAndDojo` omits tuition, so this reads the real default.
+  it('gives a new dojo the tuition the constant specifies', async () => {
+    const result = await createPlayerAndDojo(USER_A, input(), T0, ctx);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.state.dojo.tuition).toBe(STARTING_TUITION);
+  });
+
+  it('has a dojos.tuition DEFAULT matching STARTING_TUITION', async () => {
+    // The insert now writes tuition explicitly, so this reads the DEFAULT
+    // directly. Without it the constant and the migration could drift apart
+    // again and nothing would notice.
+    const result = await harness.db.execute(
+      sql`select column_default from information_schema.columns
+          where table_name = 'dojos' and column_name = 'tuition'`,
+    );
+    const rows = (result as unknown as { rows: { column_default: string }[] }).rows;
+    expect(Number(String(rows[0].column_default).replace(/[^0-9.]/g, ''))).toBe(STARTING_TUITION);
+  });
+
+  it('gives a new dojo the starting resources the constants specify', async () => {
+    const result = await createPlayerAndDojo(USER_A, input(), T0, ctx);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.state.dojo.energy.value).toBe(STARTING_ENERGY);
+    expect(result.state.dojo.focus.value).toBe(STARTING_FOCUS);
+  });
+
+  it('gives a new player the headmaster attributes the constant specifies', async () => {
+    const result = await createPlayerAndDojo(USER_A, input(), T0, ctx);
+    if (!result.ok) throw new Error(result.reason);
+    for (const attribute of [
+      result.state.player.technique,
+      result.state.player.mental,
+      result.state.player.presence,
+      result.state.player.stamina,
+      result.state.player.discipline,
+    ]) {
+      expect(attribute).toBe(HEADMASTER_ATTRIBUTE_START);
+    }
+  });
+
+  it('has a students.loyalty default matching LOYALTY_START', async () => {
+    // Phase 2 will insert students without specifying loyalty, so the default is
+    // load-bearing before any code reads it.
+    const result = await harness.db.execute(
+      sql`select column_default from information_schema.columns
+          where table_name = 'students' and column_name = 'loyalty'`,
+    );
+    const rows = (result as unknown as { rows: { column_default: string }[] }).rows;
+    expect(Number(String(rows[0].column_default).replace(/[^0-9.]/g, ''))).toBe(LOYALTY_START);
   });
 });
 

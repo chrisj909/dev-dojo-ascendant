@@ -26,6 +26,26 @@ jobs:
       - run: npm run lint
       - run: npm run test:unit
 
+      # lib/db/schema.ts and drizzle/ must agree. They can silently diverge:
+      # drizzle tracks migrations by timestamp, not content, so editing the
+      # schema without regenerating leaves a database that does not match the
+      # code and nothing says so. A generate that produces a file is drift.
+      - name: Schema matches migrations
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+        run: |
+          before=$(ls drizzle/*.sql | wc -l)
+          npx drizzle-kit generate --name ci_drift_probe >/dev/null 2>&1 || true
+          after=$(ls drizzle/*.sql | wc -l)
+          if [ "$before" != "$after" ]; then
+            echo "::error::lib/db/schema.ts has changes not captured in drizzle/."
+            echo "Run 'npm run db:generate' and commit the migration."
+            git --no-pager diff --stat -- drizzle/ || true
+            ls drizzle/*.sql
+            exit 1
+          fi
+          echo "schema and migrations agree ($before migration files)"
+
   integration:
     name: Integration — row-level security
     runs-on: ubuntu-latest

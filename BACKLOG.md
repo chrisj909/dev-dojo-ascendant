@@ -79,6 +79,11 @@ tuition accrues and collects correctly.
   - **Why:** GDD §12, SPEC §4 `TUITION_CAP_HOURS`
   - **Done when:** accrual is lazy from `collected_at`, the 8-hour cap holds across a 30-day gap, and collecting at a partial tick does not discard the remainder — the same anti-banking property as Energy. Reuse `regenerate()`.
 
+- [ ] **P1** `starting-economy-bootstrap` — Decide what a dojo can afford on day one.
+  - **Why:** GDD §4.3 makes recruiting cost tuition; GDD §12 makes facilities generate it. `STARTING_TUITION` now follows SPEC §3 at 0, which means a brand-new dojo can afford nothing until a facility has produced something. That may be correct — the first session is meant to be about drills, not shopping — or it may be a dead start.
+  - **Done when:** a simulation shows the day-1 to day-3 experience under both a 0 and a non-zero opening balance, and the chosen value is recorded in `docs/DECISIONS.md` with the evidence. Use the **balance-analyst** subagent; do not simply pick a number.
+  - **Note:** 500 was in the code for the whole of Phase 1 as an undocumented deviation from the spec. It was removed rather than blessed, because a number nobody decided is worse than either answer.
+
 - [ ] **P2** `style-vector-accumulation` — Every drill nudges the school's style vector.
   - **Why:** GDD §6.2, §7.2
   - **Done when:** drilling differently produces measurably different vectors. Crystallisation itself is Phase 4; only accumulation lands here.
