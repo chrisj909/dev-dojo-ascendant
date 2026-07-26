@@ -1,0 +1,62 @@
+{
+  "name": "dev-dojo-ascendant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dojo Ascendant — a browser-based, server-authoritative dojo management game about raising students to mastery.",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project unit",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:all": "vitest run",
+    "test:watch": "vitest --project unit",
+    "test:coverage": "vitest run --project unit --coverage",
+    "db:generate": "drizzle-kit generate",
+    "db:custom": "drizzle-kit generate --custom",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx scripts/seed.ts",
+    "verify:rls": "tsx scripts/verify-rls.ts",
+    "check": "npm run format:check && npm run typecheck && npm run lint && npm run test:unit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:app-role": "tsx scripts/create-app-role.ts",
+    "loop": "node scripts/loop.mjs"
+  },
+  "dependencies": {
+    "@auth/drizzle-adapter": "1.11.3",
+    "drizzle-orm": "0.45.2",
+    "next": "16.2.12",
+    "next-auth": "5.0.0-beta.32",
+    "pg": "^8.22.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^20.19.0",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.12",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}
