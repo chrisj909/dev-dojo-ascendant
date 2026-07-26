@@ -17,6 +17,7 @@ import {
   MS_PER_DAY,
   STARTING_ENERGY,
   STARTING_FOCUS,
+  STARTING_TUITION,
 } from '@/lib/constants';
 import { dojos, players, regions, type Dojo, type Player, type Region } from '@/lib/db/schema';
 import { classifyWriteError } from '@/lib/db/write-errors';
@@ -275,6 +276,11 @@ export async function createPlayerAndDojo(
           playerId: player.id,
           name: input.dojoName,
           regionId: region.id,
+          // Written explicitly rather than left to the column DEFAULT. A
+          // constant compiled into a DEFAULT diverges silently the moment
+          // someone edits it without regenerating the migration — which is
+          // exactly what happened to this value.
+          tuition: STARTING_TUITION,
           energy: STARTING_ENERGY,
           // Not "now minus a bit": a new dojo starts its regen clock exactly
           // now, so the first tick is a full interval away.

@@ -22,6 +22,13 @@
       "when": 1785032181610,
       "tag": "0002_rls_set_role",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785103948877,
+      "tag": "0003_tuition_default",
+      "breakpoints": true
     }
   ]
 }

@@ -39,8 +39,25 @@ export const STARTING_ENERGY = 10;
 /** Focus a brand new dojo opens with. */
 export const STARTING_FOCUS = 2;
 
-/** Tuition a brand new dojo opens with. */
-export const STARTING_TUITION = 500;
+/**
+ * Tuition a brand new dojo opens with. SPEC §3: `tuition bigint default 0`.
+ *
+ * This shipped as 500 — invented during the Phase 1 build and never recorded as
+ * a deviation. CLAUDE.md says the spec wins on numbers, and docs/DECISIONS.md D5
+ * enumerates the sanctioned schema deviations without this one, so it follows
+ * the spec.
+ *
+ * Whether a dojo can afford its first recruit on nothing is a real question
+ * (GDD §4.3 makes recruiting cost tuition, §12 makes facilities generate it),
+ * but it is a Phase 2 balance question to answer with a simulation rather than
+ * a number quietly left in place. Tracked as `starting-economy-bootstrap`.
+ *
+ * NOTE: this value is baked into the column DEFAULT by drizzle/0000_init.sql.
+ * Changing it here does nothing to an existing database without a migration —
+ * hence drizzle/0003, and the assertion in tests/integration/onboarding.test.ts
+ * that the stored default matches this constant.
+ */
+export const STARTING_TUITION = 0;
 
 // ---------------------------------------------------------------------------
 // Headmaster attributes — GDD §3

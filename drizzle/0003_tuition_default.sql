@@ -1,0 +1,1 @@
+ALTER TABLE "dojos" ALTER COLUMN "tuition" SET DEFAULT 0;
