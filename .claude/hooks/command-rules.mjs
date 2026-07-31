@@ -62,6 +62,31 @@ const DATABASE_MUTATIONS =
 /** Any reference to a real env file. `.env.example` is the one that is safe. */
 const ENV_FILE = /(?:^|[\s'"=/(])\.env(?![\w.-]*\.example\b)(?:\.[\w-]+)*\b|\.env\*/;
 
+/** Programs that actually execute SQL. */
+const SQL_CLIENT = /\b(?:psql|pgcli|pg_dump|pg_restore)\b/;
+
+/** A heredoc body: `<<EOF` or `<<'EOF'`, through to the closing marker. */
+const HEREDOC = /<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?[\s\S]*?^\1[ \t]*$/gm;
+
+/**
+ * Strip heredoc bodies before matching SQL keywords, unless the command
+ * actually invokes a SQL client.
+ *
+ * A heredoc body is DATA being written somewhere — a file, a commit message —
+ * not a statement being executed. Matching SQL keywords inside one blocked a
+ * commit whose message merely *described* a destructive statement, which is a
+ * false positive that would hit the loop constantly: commit messages and
+ * documentation routinely name the thing they are about.
+ *
+ * When a SQL client IS present the body is very likely being fed to it, so the
+ * whole command is matched exactly as before. An inline `node -e "... DROP
+ * TABLE ..."` has no heredoc and is still matched directly.
+ */
+function executable(command) {
+  if (SQL_CLIENT.test(command)) return command;
+  return command.replace(HEREDOC, ' <heredoc> ');
+}
+
 export const RULES = [
   {
     id: 'db-mutation',
@@ -114,14 +139,14 @@ export const RULES = [
   },
   {
     id: 'destructive-ddl',
-    test: (command) => /\bDROP\s+(?:TABLE|SCHEMA|DATABASE)\b/i.test(command),
+    test: (command) => /\bDROP\s+(?:TABLE|SCHEMA|DATABASE)\b/i.test(executable(command)),
     reason:
       'Destructive DDL is blocked outside a reviewed migration. Write it as a drizzle migration ' +
       'in drizzle/ so it is versioned and reviewable.',
   },
   {
     id: 'truncate',
-    test: (command) => /\bTRUNCATE\b/i.test(command),
+    test: (command) => /\bTRUNCATE\b/i.test(executable(command)),
     reason:
       'TRUNCATE is blocked. The integration suite truncates its own test database through the ' +
       'harness, which refuses to run against the application database; nothing else should.',

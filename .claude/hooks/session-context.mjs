@@ -12,6 +12,8 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
+import { countOpen } from './work-items.mjs';
+
 function read(path) {
   try {
     return existsSync(path) ? readFileSync(path, 'utf8') : '';
@@ -26,18 +28,6 @@ function git(args) {
   } catch {
     return '';
   }
-}
-
-/** Count `- [ ]` entries by their `P0`/`P1`/`P2` marker. */
-function countOpen(markdown) {
-  const open = markdown.split('\n').filter((line) => /^\s*-\s*\[ \]/.test(line));
-  const byPriority = { P0: 0, P1: 0, P2: 0, other: 0 };
-  for (const line of open) {
-    const match = line.match(/\b(P[012])\b/);
-    if (match) byPriority[match[1]] += 1;
-    else byPriority.other += 1;
-  }
-  return { total: open.length, byPriority };
 }
 
 const bugtraq = countOpen(read('BUGTRAQ.md'));

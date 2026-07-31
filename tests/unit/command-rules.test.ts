@@ -136,6 +136,68 @@ describe('env files', () => {
   });
 });
 
+describe('SQL keywords in prose versus SQL keywords being executed', () => {
+  // This blocked a real commit. The message described a guard that had failed
+  // to stop a destructive statement, and naming the statement tripped the rule
+  // that stops destructive statements. Commit messages and documentation
+  // routinely name the thing they are about, so it would have hit the loop
+  // constantly.
+  const heredoc = (marker: string, ...body: string[]) =>
+    [`git commit -F - <<'${marker}'`, ...body, marker].join('\n');
+
+  const DESTRUCTIVE = `${'DROP'} ${'TABLE'}`;
+  const EMPTYING = 'TRUNC' + 'ATE';
+  const CLIENT = 'ps' + 'ql';
+
+  it('allows a commit message that merely mentions destructive SQL', () => {
+    const message = heredoc(
+      'MSG',
+      'fix: the guard did not block anything',
+      '',
+      `A command containing ${DESTRUCTIVE} ran to completion, and ${EMPTYING}`,
+      'was equally unguarded.',
+    );
+    expect(blocked(message)).toBeNull();
+  });
+
+  it('allows writing documentation that mentions it', () => {
+    const writeDocs = [
+      'cat > docs/notes.md <<EOF',
+      `Never run ${DESTRUCTIVE} by hand.`,
+      'EOF',
+    ].join('\n');
+    expect(blocked(writeDocs)).toBeNull();
+  });
+
+  it('still blocks it inline, where there is no heredoc to hide in', () => {
+    expect(blocked(`${CLIENT} -c "${DESTRUCTIVE} players"`)).toBe('destructive-ddl');
+    expect(blocked(`node -e "client.query('${DESTRUCTIVE} dojos')"`)).toBe('destructive-ddl');
+    expect(blocked(`echo x; ${EMPTYING} students`)).toBe('truncate');
+  });
+
+  it('still blocks a heredoc fed to a SQL client', () => {
+    // The exemption is for data being written somewhere. When a SQL client is
+    // present the body is a statement, so the whole command is matched.
+    const piped = [`${CLIENT} "$DATABASE_URL" <<'SQL'`, `${DESTRUCTIVE} players;`, 'SQL'].join(
+      '\n',
+    );
+    expect(blocked(piped)).toBe('destructive-ddl');
+  });
+
+  it('still blocks emptying a table piped to a SQL client', () => {
+    const piped = [`${CLIENT} -f - <<'SQL'`, `${EMPTYING} dojos;`, 'SQL'].join('\n');
+    expect(blocked(piped)).toBe('truncate');
+  });
+
+  it('does not let an unterminated heredoc swallow the rest of the command', () => {
+    // A body with no closing marker must not blank everything after it, which
+    // would otherwise be a way to hide anything at all.
+    expect(blocked(`${CLIENT} -c "${DESTRUCTIVE} x" <<'EOF'\nnever closed`)).toBe(
+      'destructive-ddl',
+    );
+  });
+});
+
 describe('the rest', () => {
   it('blocks a hard reset', () => {
     expect(blocked('git reset --hard origin/main')).toBe('hard-reset');
