@@ -178,3 +178,65 @@ pointing at Vercel's anycast address. A new subdomain therefore usually needs no
 DNS change at all — attach it in Vercel and it resolves. If Vercel reports
 _Invalid Configuration_, add an explicit CNAME to `cname.vercel-dns.com` at
 WordPress.com.
+
+---
+
+## D10 — The migration pipeline is live, and what it cost to get there
+
+As of 2026-07-27 the full path works: merge to `main` touching `drizzle/**` or
+`lib/db/schema.ts` runs `.github/workflows/migrate.yml`, which applies
+migrations to Neon, seeds reference data, and then runs `verify:rls` as a gate.
+Six migrations are applied; the roster cap trigger is enforcing on production.
+
+Two things about getting there are worth keeping.
+
+**The secret was set, and the workflow still failed.** `dotenv` prints a banner
+to _stdout_, so piping a value out of a `node -e` that loads it emits
+`banner + newline + value`. GitHub stored 236 bytes for a 141-character
+connection string. The symptom was `(unparseable connection string)`, which
+reads like a malformed URL rather than a polluted pipe. Recorded in
+`.claude/memory/stdout-banners-poison-pipes.md`.
+
+**The preflight is what made it diagnosable.** `migrate.yml` checks the secret
+is non-empty before connecting. That turned "is it missing or is it wrong?" into
+a single answered question, and it is the reason the second attempt took one
+minute rather than an afternoon. Cheap checks that distinguish _absent_ from
+_malformed_ earn their place.
+
+---
+
+## D11 — Region quality must be a trade-off, not a gradient
+
+**Status: decided in principle, parameters pending.**
+
+GDD §13 says "expansion is a strategic choice rather than a number going up".
+Every naive parameterisation of student generation contradicts it: when region
+`recruitQuality` shifts the mean of the attribute distribution, a quality-5
+recruit out-powers a quality-2 recruit **99–100%** of the time, and the founding
+region decides the game.
+
+Simulation (20,000 trials per cell, real RNG, SPEC §5.1 weights) found the shape
+that rescues it, and it is not the one that was expected:
+
+| Measurement                             | Result                            |
+| --------------------------------------- | --------------------------------- |
+| q5 recruit beats q2 recruit             | 73%                               |
+| q2 pool-of-5 beats q5 pool-of-5         | 34%                               |
+| q2 **ace** beats q5 ace                 | 52% — a coin flip                 |
+| q2 **roster-of-8** beats q5 roster-of-8 | **13.9%**                         |
+| Squad ordering with a scout             | **+24 to +28 points** of win rate |
+
+The variance story works for a single recruit and dies at roster scale: eight
+slots × best-of-five is forty draws, enough to average any tail away. The
+premise that a cap of 8 keeps variance _felt_ is false by measurement.
+
+What holds the design together instead is that **the ordering decision is worth
+more than the entire regional gap** — 27% → 51% win rate for a q2 attacker
+against a q5 defender, consistently across tier pairs. Region choice does not
+swamp GDD §8.3's "one real decision"; the decision swamps region choice. And the
+choice a new player actually makes (q2 Okinawa vs q3 Henan/Rio, the only
+`unlockTier: 0` regions) is near-balanced: 43% blind, 71% scouted.
+
+Final constants are pending the adversarial pass — the one that checks whether a
+competent player can simply solve the trade-off, or whether it evaporates once
+they are richer. Tracked as `student-generation` in `BACKLOG.md`.

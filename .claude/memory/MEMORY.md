@@ -29,5 +29,7 @@ repository would tell you that.
 ## Process, learned the hard way
 
 - [Safety rules fail by looking right](safety-rules-fail-by-looking-right.md) — three controls here enforced nothing; test the guard, not just the feature.
+- [Hooks load at session start](hooks-load-at-session-start.md) — the session that writes a hook is not governed by it.
+- [stdout banners poison pipes](stdout-banners-poison-pipes.md) — dotenv greets you on stdout and corrupted a secret piped to `gh`.
 - [Tests run on PGlite by default](tests-use-pglite.md) — real Postgres in-process, so RLS is covered in CI with no credentials.
 - [Auth.js v5 is still beta](auth-js-still-beta.md) — pinned exactly, and why it was chosen anyway.
